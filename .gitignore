@@ -1,0 +1,5 @@
+bin/
+obj/
+Output/
+.vs/
+*.user

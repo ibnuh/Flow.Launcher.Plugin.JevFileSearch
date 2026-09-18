@@ -1,0 +1,64 @@
+name: Publish
+
+on:
+    push:
+        tags: ['v*']
+
+jobs:
+    build:
+        runs-on: windows-latest
+        permissions:
+            contents: write
+
+        steps:
+            - uses: actions/checkout@v3
+              with:
+                  fetch-depth: 0
+
+            - name: Require tag commit on main
+              shell: pwsh
+              run: |
+                  git fetch origin main
+                  git merge-base --is-ancestor $env:GITHUB_SHA origin/main
+                  if ($LASTEXITCODE -ne 0) {
+                      Write-Error "Tag '$env:GITHUB_REF_NAME' ($env:GITHUB_SHA) is not on main. Merge to main first, then tag."
+                      exit 1
+                  }
+                  Write-Host "Tag '$env:GITHUB_REF_NAME' is on main."
+
+            - name: Get version
+              id: version
+              uses: notiz-dev/github-action-json-property@release
+              with:
+                  path: Flow.Launcher.Plugin.JevFileSearch/plugin.json
+                  prop_path: Version
+
+            - name: Verify tag matches plugin.json version
+              shell: pwsh
+              run: |
+                  $tag = '${{ github.ref_name }}'
+                  $version = 'v${{ steps.version.outputs.prop }}'
+                  if ($tag -ne $version) {
+                      Write-Error "Tag '$tag' does not match plugin.json Version '$version'. Bump plugin.json Version to match the tag before tagging a release."
+                      exit 1
+                  }
+                  Write-Host "Tag '$tag' matches plugin.json Version."
+
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v3
+              with:
+                  dotnet-version: 9.x
+
+            - name: Build
+              shell: pwsh
+              run: |
+                  dotnet publish Flow.Launcher.Plugin.JevFileSearch/Flow.Launcher.Plugin.JevFileSearch.csproj -c Release -o Output
+                  Compress-Archive -Path Output/* -DestinationPath Flow.Launcher.Plugin.JevFileSearch.zip -Force
+
+            - name: Publish
+              uses: softprops/action-gh-release@v1
+              with:
+                  files: Flow.Launcher.Plugin.JevFileSearch.zip
+                  tag_name: ${{ github.ref_name }}
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
