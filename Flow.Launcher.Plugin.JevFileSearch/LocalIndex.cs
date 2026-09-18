@@ -7,7 +7,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
 {
     /// <summary>
     /// Builds the local candidate index: Start Menu apps, recent user files,
-    /// and system toggles. Pure code, no model involved.
+    /// non-system drive roots, and system toggles. Pure code, no model involved.
     /// Windows port of LocalIndex.swift from dabit3/jev-experiments/jev-launcher.
     /// </summary>
     public static class LocalIndex
@@ -15,13 +15,14 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         public static List<Candidate> Build(Settings settings)
         {
             var all = new List<Candidate>();
-            all.AddRange(ScanApps());
+            all.AddRange(ScanApps(settings));
             all.AddRange(ScanFiles(settings));
+            all.AddRange(ScanDriveRoots(settings));
             all.AddRange(Toggles.AllCandidates());
             return all;
         }
 
-        private static List<Candidate> ScanApps()
+        private static List<Candidate> ScanApps(Settings settings)
         {
             var roots = new[]
             {
@@ -35,21 +36,23 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             {
                 if (!Directory.Exists(root))
                     continue;
-                var top = new List<string>();
-                try { top.AddRange(Directory.GetFiles(root, "*.lnk")); } catch { }
-                var sublinks = new List<string>();
+                var links = new List<string>();
+                try { links.AddRange(Directory.GetFiles(root, "*.lnk")); } catch { }
                 try
                 {
                     foreach (var dir in Directory.GetDirectories(root))
                     {
-                        try { sublinks.AddRange(Directory.GetFiles(dir, "*.lnk")); } catch { }
+                        try { links.AddRange(Directory.GetFiles(dir, "*.lnk")); } catch { }
                     }
                 }
                 catch { }
-                foreach (var link in top.Concat(sublinks))
+
+                foreach (var link in links)
                 {
                     var title = Path.GetFileNameWithoutExtension(link);
                     if (string.IsNullOrWhiteSpace(title))
+                        continue;
+                    if (Settings.IsAppLinkNoise(title))
                         continue;
                     if (!seen.Add(title.ToLowerInvariant()))
                         continue;
@@ -74,25 +77,82 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             {
                 if (!Directory.Exists(folder))
                     continue;
-                var urls = new List<string>();
+                var entries = new List<string>();
                 try
                 {
-                    urls.AddRange(Directory.GetFileSystemEntries(folder));
+                    entries.AddRange(Directory.GetFileSystemEntries(folder));
                     foreach (var dir in Directory.GetDirectories(folder))
                     {
-                        try { urls.AddRange(Directory.GetFileSystemEntries(dir)); } catch { }
+                        try { entries.AddRange(Directory.GetFileSystemEntries(dir)); } catch { }
                     }
                 }
                 catch { continue; }
 
-                var folderName = Path.GetFileName(folder.TrimEnd(Path.DirectorySeparatorChar));
-                foreach (var entry in urls.Take(settings.MaxFilesPerFolder))
-                    files.Add(FileCandidate(entry, folderName, now));
+                var folderName = FolderLabel(folder);
+                foreach (var entry in entries.Take(settings.MaxFilesPerFolder))
+                {
+                    if (settings.IsExcludedFile(entry))
+                        continue;
+                    files.Add(FileCandidate(entry, now, folderName));
+                }
             }
             return files;
         }
 
-        private static Candidate FileCandidate(string entry, string folder, DateTime now)
+        /// <summary>
+        /// One candidate per non-system fixed drive plus a shallow scan of its root,
+        /// so D:\ and friends are searchable out of the box. Everything, when present,
+        /// covers these drives exhaustively instead.
+        /// </summary>
+        private static List<Candidate> ScanDriveRoots(Settings settings)
+        {
+            var results = new List<Candidate>();
+            var now = DateTime.Now;
+            foreach (var root in settings.OtherFixedDriveRoots())
+            {
+                long freeBytes = 0;
+                double totalGb = 0;
+                try
+                {
+                    var drive = new DriveInfo(root);
+                    freeBytes = drive.AvailableFreeSpace;
+                    totalGb = drive.TotalSize / 1073741824.0;
+                }
+                catch { }
+
+                string letter = root.TrimEnd('\\', '/');
+                results.Add(new Candidate(
+                    "drive:" + root,
+                    letter + " drive",
+                    "Drive \u00b7 " + (totalGb > 0 ? totalGb.ToString("F0") + " GB, " + (freeBytes / 1073741824.0).ToString("F0") + " GB free" : "local disk"),
+                    ActionKind.OpenFile,
+                    new List<string> { "drive", "disk", "volume", letter.ToLowerInvariant() },
+                    PayloadKind.File,
+                    path: root));
+
+                var entries = new List<string>();
+                try
+                {
+                    entries.AddRange(Directory.GetFileSystemEntries(root));
+                    foreach (var dir in Directory.GetDirectories(root))
+                    {
+                        try { entries.AddRange(Directory.GetFileSystemEntries(dir)); } catch { }
+                    }
+                }
+                catch { continue; }
+
+                foreach (var entry in entries.Take(settings.MaxFilesPerFolder))
+                {
+                    if (settings.IsExcludedFile(entry))
+                        continue;
+                    results.Add(FileCandidate(entry, now, letter));
+                }
+            }
+            return results;
+        }
+
+        /// <summary>Builds an open_file candidate with keywords and a recency phrase for Jev.</summary>
+        public static Candidate FileCandidate(string entry, DateTime now, string folder = null)
         {
             bool isDir = Directory.Exists(entry);
             DateTime modified;
@@ -102,6 +162,9 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             double ageDays = Math.Max(0, (now - modified).TotalDays);
             string name = Path.GetFileName(entry);
             string ext = isDir ? "" : Path.GetExtension(entry).TrimStart('.').ToLowerInvariant();
+            string location = Path.GetDirectoryName(entry) ?? "";
+            if (string.IsNullOrEmpty(folder))
+                folder = FolderLabel(location);
 
             var keywords = new List<string> { folder.ToLowerInvariant(), "file" };
             if (folder.Equals("Downloads", StringComparison.OrdinalIgnoreCase))
@@ -119,8 +182,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 keywords.AddRange(new[] { "recent", "latest", "new", "today" });
 
             string home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            string location = Path.GetDirectoryName(entry) ?? folder;
-            if (location.StartsWith(home, StringComparison.OrdinalIgnoreCase))
+            if (!string.IsNullOrEmpty(home) && location.StartsWith(home, StringComparison.OrdinalIgnoreCase))
                 location = "~" + location.Substring(home.Length);
 
             string label = isDir ? "Folder" : FileTypeLabel(ext);
@@ -137,7 +199,18 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 ageDays: ageDays);
         }
 
-        private static string[] FileTypeWords(string ext)
+        private static string FolderLabel(string directory)
+        {
+            if (string.IsNullOrEmpty(directory))
+                return "file";
+            string trimmed = directory.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            string name = Path.GetFileName(trimmed);
+            if (string.IsNullOrEmpty(name))
+                return trimmed.Length >= 2 ? trimmed.Substring(0, 2) : "file";
+            return name;
+        }
+
+        public static string[] FileTypeWords(string ext)
         {
             switch (ext)
             {
@@ -158,7 +231,6 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 case "zip":
                 case "7z":
                 case "rar":
-                case "msi":
                 case "exe":
                 case "tar":
                 case "gz":

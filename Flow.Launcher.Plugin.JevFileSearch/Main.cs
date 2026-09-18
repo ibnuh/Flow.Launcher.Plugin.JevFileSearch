@@ -17,8 +17,18 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         private DateTime _indexBuiltAt = DateTime.MinValue;
 
         private static readonly TimeSpan IndexRefreshAfter = TimeSpan.FromMinutes(5);
+        private static readonly TimeSpan EverythingCacheTtl = TimeSpan.FromSeconds(20);
+        private static readonly Dictionary<string, EverythingCacheEntry> EverythingCache =
+            new Dictionary<string, EverythingCacheEntry>(StringComparer.OrdinalIgnoreCase);
+        private static readonly object EverythingCacheLock = new object();
 
         private const string Icon = "images/icon.png";
+
+        private sealed class EverythingCacheEntry
+        {
+            public DateTime At;
+            public List<Candidate> Candidates;
+        }
 
         /// <inheritdoc />
         public Task InitAsync(PluginInitContext context)
@@ -44,6 +54,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         private void SaveSettings()
         {
             try { Context.API.SaveSettingJsonStorage<Settings>(); } catch { }
+            Task.Run(() => RebuildIndex());
         }
 
         private void RebuildIndex()
@@ -64,6 +75,33 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         {
             lock (_index)
                 return _index.ToList();
+        }
+
+        /// <summary>
+        /// Everything's index covers whole volumes, including non-system drives, so it
+        /// supplies extra candidates whenever es.exe is available. Results are cached
+        /// briefly so a per-keystroke query does not relaunch the process each time.
+        /// </summary>
+        private static List<Candidate> EverythingCandidates(string query, Settings settings)
+        {
+            if (settings == null || !settings.UseEverything || query.Length < 2)
+                return new List<Candidate>();
+
+            lock (EverythingCacheLock)
+            {
+                if (EverythingCache.TryGetValue(query, out var cached) &&
+                    DateTime.UtcNow - cached.At < EverythingCacheTtl)
+                    return cached.Candidates;
+            }
+
+            var found = Everything.Search(query, settings);
+            lock (EverythingCacheLock)
+            {
+                if (EverythingCache.Count > 40)
+                    EverythingCache.Clear();
+                EverythingCache[query] = new EverythingCacheEntry { At = DateTime.UtcNow, Candidates = found };
+            }
+            return found;
         }
 
         /// <inheritdoc />
@@ -89,7 +127,13 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             var results = new List<Result>();
             try
             {
-                var prefiltered = Ranker.Prefilter(search, SnapshotIndex());
+                var pool = SnapshotIndex();
+                var everything = await Task.Run(() => EverythingCandidates(search, _settings), cancellationToken)
+                    .ConfigureAwait(false);
+                if (everything.Count > 0)
+                    pool.AddRange(everything);
+
+                var prefiltered = Ranker.Prefilter(search, pool);
                 if (prefiltered.Candidates.Count == 0)
                 {
                     results.Add(new Result

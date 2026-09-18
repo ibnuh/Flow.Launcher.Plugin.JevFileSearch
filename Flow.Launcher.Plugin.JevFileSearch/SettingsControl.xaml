@@ -2,13 +2,27 @@
     x:Class="Flow.Launcher.Plugin.JevFileSearch.SettingsControl"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel Margin="12">
-        <TextBlock Text="TypeSafe API key (or set the TYPESAFE_API_KEY environment variable):" TextWrapping="Wrap" Margin="0,0,0,4"/>
-        <TextBox Name="ApiKeyBox" Margin="0,0,0,12"/>
-        <TextBlock Text="Folders to index, separated by semicolons (blank means Desktop, Downloads and Documents):" TextWrapping="Wrap" Margin="0,0,0,4"/>
-        <TextBox Name="DirsBox" Margin="0,0,0,12"/>
-        <TextBlock Text="Max entries per folder:" Margin="0,0,0,4"/>
-        <TextBox Name="MaxBox" Margin="0,0,0,12"/>
-        <TextBlock Text="Get a key at https://console.typesafe.ai/settings/keys. Without a key the plugin still works as a fuzzy file launcher." TextWrapping="Wrap" Opacity="0.7"/>
-    </StackPanel>
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="12">
+            <TextBlock Text="TypeSafe API key (or set the TYPESAFE_API_KEY environment variable):" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <TextBox Name="ApiKeyBox" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Folders to index, separated by semicolons. Blank means Desktop, Downloads and Documents:" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <TextBox Name="DirsBox" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Max entries per folder:" Margin="0,0,0,4"/>
+            <TextBox Name="MaxBox" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+
+            <CheckBox Name="OtherDrivesBox" Content="Also index non-system fixed drives (D:, E:, ...)" Margin="0,0,0,12"/>
+
+            <CheckBox Name="EverythingBox" Content="Use the Everything index when es.exe is available" Margin="0,0,0,4"/>
+            <TextBlock Text="Everything indexes whole volumes, which is faster and wider than the folder scan above. Install Everything and enable its command line client (es.exe), or point at it here." TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,6"/>
+            <TextBox Name="EverythingPathBox" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Never index these file extensions (semicolons, dots optional):" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <TextBox Name="ExcludeBox" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Get a TypeSafe key at https://console.typesafe.ai/settings/keys. Without a key the plugin still works as a fuzzy file launcher." TextWrapping="Wrap" Opacity="0.7"/>
+        </StackPanel>
+    </ScrollViewer>
 </UserControl>

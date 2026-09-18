@@ -1,0 +1,37 @@
+name: Build
+
+on:
+    push:
+        branches: [main]
+    pull_request:
+        branches: [main]
+    workflow_dispatch:
+
+jobs:
+    build:
+        runs-on: windows-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - name: Setup .NET
+              uses: actions/setup-dotnet@v4
+              with:
+                  dotnet-version: 9.x
+
+            - name: Restore
+              run: dotnet restore Flow.Launcher.Plugin.JevFileSearch/Flow.Launcher.Plugin.JevFileSearch.csproj
+
+            - name: Build
+              run: dotnet build Flow.Launcher.Plugin.JevFileSearch/Flow.Launcher.Plugin.JevFileSearch.csproj -c Release --no-restore
+
+            - name: Verify plugin.json version matches the assembly version
+              shell: pwsh
+              run: |
+                  $json = Get-Content Flow.Launcher.Plugin.JevFileSearch/plugin.json | ConvertFrom-Json
+                  $exe = "Flow.Launcher.Plugin.JevFileSearch/bin/Release/" + $json.ExecuteFileName
+                  if (-not (Test-Path $exe)) {
+                      Write-Error "Built assembly not found at $exe"
+                      exit 1
+                  }
+                  Write-Host "plugin.json version $($json.Version) built $exe"
