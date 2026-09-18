@@ -32,8 +32,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         public const double ActionWeight = 0.20;
         public const double FuzzyWeight = 0.15;
 
-        /// <summary>Fuzzy-scores the whole index and keeps the top-k.</summary>
-        public static Prefiltered Prefilter(string query, List<Candidate> index)
+        /// <summary>Fuzzy-scores the pool and keeps the top-k, deduplicated by candidate id.</summary>
+        public static Prefiltered Prefilter(string query, IEnumerable<Candidate> pool)
         {
             var result = new Prefiltered();
             string trimmed = query.Trim();
@@ -41,8 +41,11 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 return result;
 
             var scored = new List<KeyValuePair<Candidate, double>>();
-            foreach (var candidate in index)
+            var seen = new HashSet<string>();
+            foreach (var candidate in pool)
             {
+                if (!seen.Add(candidate.Id))
+                    continue;
                 double score = Fuzzy.Score(trimmed, candidate);
                 if (score >= MinimumFuzzy)
                     scored.Add(new KeyValuePair<Candidate, double>(candidate, score));
