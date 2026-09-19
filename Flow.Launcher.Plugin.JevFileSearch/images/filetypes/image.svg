@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="0" y="0" width="64" height="64" rx="14" fill="#16A34A"/>
-  <text x="32" y="32" font-family="DejaVu Sans" font-size="20" font-weight="bold"
-        fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">IMG</text>
-</svg>
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='4' width='56' height='56' rx='14' fill='#DB2777'/><rect x='4' y='4' width='56' height='56' rx='14' fill='none' stroke='#0F172A' stroke-opacity='0.15' stroke-width='1.5'/><circle cx='38' cy='25' r='3.4' fill='#FFFFFF'/><polygon points='19,45 27,33 32,40 35,36 45,45' fill='#FFFFFF'/></svg>

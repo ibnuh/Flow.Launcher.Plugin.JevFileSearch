@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="0" y="0" width="64" height="64" rx="14" fill="#CA8A04"/>
-  <text x="32" y="32" font-family="DejaVu Sans" font-size="20" font-weight="bold"
-        fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">ZIP</text>
-</svg>
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='4' width='56' height='56' rx='14' fill='#B45309'/><rect x='4' y='4' width='56' height='56' rx='14' fill='none' stroke='#0F172A' stroke-opacity='0.15' stroke-width='1.5'/><rect x='20' y='26' width='24' height='17' rx='3' fill='#FFFFFF'/><rect x='20' y='26' width='24' height='6' rx='3' fill='#78350F' opacity='0.45'/><rect x='29.5' y='26' width='5' height='17' fill='#78350F' opacity='0.45'/></svg>
