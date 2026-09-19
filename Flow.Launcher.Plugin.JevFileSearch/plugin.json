@@ -4,7 +4,7 @@
     "Name": "Jev File Search",
     "Description": "Predictive file and app search with Jev intent reranking. Type natural language like 'the pdf I just downloaded'.",
     "Author": "ibnuh",
-    "Version": "0.3.0",
+    "Version": "0.3.1",
     "Language": "csharp",
     "Website": "https://github.com/ibnuh/Flow.Launcher.Plugin.JevFileSearch",
     "IcoPath": "images/icon.png",
