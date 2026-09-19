@@ -1,5 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect x="0" y="0" width="64" height="64" rx="14" fill="#0F766E"/>
-  <text x="32" y="32" font-family="DejaVu Sans" font-size="20" font-weight="bold"
-        fill="#FFFFFF" text-anchor="middle" dominant-baseline="central">SYS</text>
-</svg>
+<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect x='4' y='4' width='56' height='56' rx='14' fill='#0F766E'/><rect x='4' y='4' width='56' height='56' rx='14' fill='none' stroke='#0F172A' stroke-opacity='0.15' stroke-width='1.5'/><rect x='20' y='24' width='24' height='4' rx='2' fill='#FFFFFF' opacity='0.55'/><circle cx='36' cy='26' r='5' fill='#FFFFFF'/><rect x='20' y='36' width='24' height='4' rx='2' fill='#FFFFFF' opacity='0.55'/><circle cx='28' cy='38' r='5' fill='#FFFFFF'/></svg>

@@ -53,12 +53,12 @@ jobs:
               shell: pwsh
               run: |
                   dotnet publish Flow.Launcher.Plugin.JevFileSearch/Flow.Launcher.Plugin.JevFileSearch.csproj -c Release -o Output
-                  Compress-Archive -Path Output/* -DestinationPath Flow.Launcher.Plugin.JevFileSearch.zip -Force
+                  Compress-Archive -Path Output/* -DestinationPath "Flow.Launcher.Plugin.JevFileSearch-${{ steps.version.outputs.prop }}.zip" -Force
 
             - name: Publish
               uses: softprops/action-gh-release@v1
               with:
-                  files: Flow.Launcher.Plugin.JevFileSearch.zip
+                  files: Flow.Launcher.Plugin.JevFileSearch-${{ steps.version.outputs.prop }}.zip
                   tag_name: ${{ github.ref_name }}
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
