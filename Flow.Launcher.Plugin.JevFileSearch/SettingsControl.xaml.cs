@@ -21,6 +21,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             EverythingBox.IsChecked = _settings.UseEverything;
             EverythingPathBox.Text = _settings.EverythingPath ?? "";
             ExcludeBox.Text = _settings.ExcludeExtensions ?? Settings.DefaultExcludeExtensions;
+            ExcludePathsBox.Text = _settings.ExcludePaths ?? Settings.DefaultExcludePaths;
+            EverythingLimitBox.Text = _settings.EverythingLimit.ToString();
 
             ApiKeyBox.TextChanged += (_, __) => { _settings.ApiKey = ApiKeyBox.Text.Trim(); _save(); };
             DirsBox.TextChanged += (_, __) => { _settings.IndexDirs = DirsBox.Text.Trim(); _save(); };
@@ -38,6 +40,15 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             EverythingBox.Unchecked += (_, __) => { _settings.UseEverything = false; _save(); };
             EverythingPathBox.TextChanged += (_, __) => { _settings.EverythingPath = EverythingPathBox.Text.Trim(); _save(); };
             ExcludeBox.TextChanged += (_, __) => { _settings.ExcludeExtensions = ExcludeBox.Text.Trim(); _save(); };
+            ExcludePathsBox.TextChanged += (_, __) => { _settings.ExcludePaths = ExcludePathsBox.Text.Trim(); _save(); };
+            EverythingLimitBox.TextChanged += (_, __) =>
+            {
+                if (int.TryParse(EverythingLimitBox.Text.Trim(), out int limit) && limit > 0)
+                {
+                    _settings.EverythingLimit = limit;
+                    _save();
+                }
+            };
         }
     }
 }

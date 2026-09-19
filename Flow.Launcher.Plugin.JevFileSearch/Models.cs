@@ -67,7 +67,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
     }
 
     /// <summary>
-    /// Something the launcher can execute. Produced by the local index.
+    /// Something the launcher can execute. Produced by the local index or by the
+    /// Everything planner.
     /// Port of the jev-launcher Candidate type (dabit3/jev-experiments).
     /// </summary>
     public sealed class Candidate
@@ -81,10 +82,14 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         public string Path { get; }
         public SystemToggle Toggle { get; }
         public double? AgeDays { get; }
+        public long? SizeBytes { get; }
+        public bool IsDirectory { get; }
+        public string IconPath { get; }
 
         public Candidate(string id, string title, string subtitle, ActionKind kind,
             List<string> keywords, PayloadKind payload, string path = null,
-            SystemToggle toggle = SystemToggle.ToggleDarkMode, double? ageDays = null)
+            SystemToggle toggle = SystemToggle.ToggleDarkMode, double? ageDays = null,
+            long? sizeBytes = null, bool isDirectory = false, string iconPath = null)
         {
             Id = id;
             Title = title;
@@ -95,6 +100,9 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             Path = path;
             Toggle = toggle;
             AgeDays = ageDays;
+            SizeBytes = sizeBytes;
+            IsDirectory = isDirectory;
+            IconPath = string.IsNullOrEmpty(iconPath) ? FileIcons.Default : iconPath;
         }
 
         /// <summary>Lower-cased text the fuzzy matcher searches: title words plus keywords.</summary>
@@ -106,6 +114,18 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             foreach (var keyword in Keywords)
                 terms.Add(keyword.ToLowerInvariant());
             return terms;
+        }
+
+        /// <summary>Human-readable size, for the subtitle.</summary>
+        public string SizeLabel()
+        {
+            if (!SizeBytes.HasValue || IsDirectory)
+                return null;
+            double bytes = SizeBytes.Value;
+            if (bytes < 1024) return bytes + " B";
+            if (bytes < 1024 * 1024) return (bytes / 1024).ToString("F0") + " KB";
+            if (bytes < 1024L * 1024 * 1024) return (bytes / (1024.0 * 1024)).ToString("F1") + " MB";
+            return (bytes / (1024.0 * 1024 * 1024)).ToString("F2") + " GB";
         }
     }
 }

@@ -8,18 +8,31 @@ using System.Text;
 namespace Flow.Launcher.Plugin.JevFileSearch
 {
     /// <summary>
-    /// Optional integration with the Everything index (https://www.voidtools.com)
-    /// through its command line client es.exe. When present, Everything supplies the
-    /// candidate shortlist instead of the plugin's own folder scan, which covers
-    /// every indexed volume including non-system drives.
+    /// Integration with the Everything index (https://www.voidtools.com) through its
+    /// command line client es.exe. Everything is the index that makes whole-volume file
+    /// search possible on Windows, so when it is present it supplies the candidates and
+    /// the plugin's own folder scan becomes the fallback instead of the main source.
+    ///
+    /// es.exe flags vary between Everything 1.4 and 1.5, and the search syntax is not
+    /// what people type, so the query is planned in code (EverythingQuery) and each plan
+    /// is tried against a few argument variants until one returns something. Every
+    /// failure path returns an empty list rather than an error, because Everything is a
+    /// bonus and the local index still works without it.
     /// </summary>
     public static class Everything
     {
         public const int DefaultLimit = 60;
         private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(3);
 
+        /// <summary>Exit codes from the Everything CLI docs.</summary>
+        private const int ExitBadSwitch = 6;
+        private const int ExitBadOption = 4;
+        private const int ExitNotRunning = 8;
+
         private static bool _probed;
         private static string _cachedPath;
+
+        public static string LastDiagnostics { get; private set; } = "";
 
         /// <summary>es.exe from settings, then PATH, then the usual install folders.</summary>
         public static string LocateExe(Settings settings)
@@ -54,48 +67,104 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             return LocateExe(settings) != null;
         }
 
-        /// <summary>
-        /// Runs `es.exe -n &lt;limit&gt; -sort date-modified &lt;query&gt;` and turns each
-        /// returned path into an open_file candidate. Returns an empty list when
-        /// Everything is missing, not running, or returns nothing usable.
-        /// </summary>
-        public static List<Candidate> Search(string query, Settings settings, int limit = DefaultLimit)
+        /// <summary>Argument variants, newest Everything first, 1.4 compatible last.</summary>
+        private static List<string> ArgumentVariants(int limit)
         {
+            return new List<string>
+            {
+                "-n " + limit + " -sort date-modified -a-d",
+                "-n " + limit + " -sort date-modified",
+                "-n " + limit + " -a-d",
+                "-n " + limit,
+            };
+        }
+
+        public static List<Candidate> Search(string userQuery, Settings settings)
+        {
+            LastDiagnostics = "";
             string exe = LocateExe(settings);
-            if (exe == null || string.IsNullOrWhiteSpace(query))
+            if (exe == null)
+            {
+                LastDiagnostics = "es.exe not found";
+                return new List<Candidate>();
+            }
+            if (string.IsNullOrWhiteSpace(userQuery))
                 return new List<Candidate>();
 
-            var lines = Run(exe, query, limit);
-            if (lines.Count == 0)
+            int limit = settings != null && settings.EverythingLimit > 0
+                ? settings.EverythingLimit
+                : DefaultLimit;
+            var plans = EverythingQuery.Plan(userQuery);
+            if (plans.Count == 0)
                 return new List<Candidate>();
 
+            foreach (var variant in ArgumentVariants(limit))
+            {
+                bool switchUnsupported = false;
+                foreach (var plan in plans)
+                {
+                    int exitCode;
+                    var lines = Run(exe, variant, plan, out exitCode);
+                    if (exitCode == ExitNotRunning)
+                    {
+                        LastDiagnostics = "es.exe: Everything client is not running (exit 8)";
+                        return new List<Candidate>();
+                    }
+                    if (exitCode == ExitBadSwitch || exitCode == ExitBadOption)
+                    {
+                        switchUnsupported = true;
+                        break;
+                    }
+                    if (exitCode == 0 && lines.Count > 0)
+                    {
+                        var candidates = Parse(lines, settings);
+                        LastDiagnostics = "es.exe \"" + variant + "\" plan \"" + plan + "\" -> "
+                            + candidates.Count + " usable of " + lines.Count + " lines";
+                        if (candidates.Count > 0)
+                            return candidates;
+                    }
+                }
+                if (switchUnsupported)
+                {
+                    LastDiagnostics = "es.exe rejected a switch in \"" + variant + "\", trying a simpler variant";
+                    continue;
+                }
+            }
+
+            if (LastDiagnostics.Length == 0)
+                LastDiagnostics = "es.exe returned no usable paths for \"" + userQuery + "\"";
+            return new List<Candidate>();
+        }
+
+        private static List<Candidate> Parse(List<string> lines, Settings settings)
+        {
             var candidates = new List<Candidate>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             var now = DateTime.Now;
             foreach (var line in lines)
             {
-                string path = line.Trim();
+                string path = line.Trim().Trim('"');
                 if (path.Length == 0 || path.Length > 400)
                     continue;
-                // Keep only lines that look like absolute paths.
-                bool hasSep = path.IndexOf('\\') >= 0 || path.IndexOf('/') >= 0;
-                if (!hasSep || !Path.IsPathRooted(path))
+                bool hasSeparator = path.IndexOf('\\') >= 0 || path.IndexOf('/') >= 0;
+                if (!hasSeparator || !Path.IsPathRooted(path))
                     continue;
                 if (!seen.Add(path))
                     continue;
-                if (settings != null && settings.IsExcludedFile(path))
+                if (settings != null && settings.IsJunk(path))
                     continue;
                 candidates.Add(LocalIndex.FileCandidate(path, now));
             }
             return candidates;
         }
 
-        private static List<string> Run(string exe, string query, int limit)
+        private static List<string> Run(string exe, string variant, string plan, out int exitCode)
         {
+            exitCode = -1;
             var startInfo = new ProcessStartInfo
             {
                 FileName = exe,
-                Arguments = "-n " + limit.ToString() + " -sort date-modified " + Quote(query),
+                Arguments = variant + " " + Quote(plan),
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 RedirectStandardOutput = true,
@@ -109,6 +178,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 {
                     if (process == null)
                         return new List<string>();
+
                     var stdout = new StringBuilder();
                     var buffer = new char[4096];
                     var reader = process.StandardOutput;
@@ -119,14 +189,18 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                         if (read <= 0)
                             break;
                         stdout.Append(buffer, 0, read);
-                        if (stdout.Length > 200000)
+                        if (stdout.Length > 400000)
                             break;
                     }
+
                     if (!process.WaitForExit(500))
                     {
                         try { process.Kill(); } catch { }
+                        exitCode = -2;
                         return new List<string>();
                     }
+
+                    exitCode = process.ExitCode;
                     return stdout.ToString()
                         .Split(new[] { "\r\n", "\n" }, StringSplitOptions.RemoveEmptyEntries)
                         .ToList();
@@ -134,6 +208,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             }
             catch
             {
+                exitCode = -3;
                 return new List<string>();
             }
         }

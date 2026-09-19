@@ -19,10 +19,17 @@
             <TextBlock Text="Everything indexes whole volumes, which is faster and wider than the folder scan above. Install Everything and enable its command line client (es.exe), or point at it here." TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,6"/>
             <TextBox Name="EverythingPathBox" Margin="0,0,0,12"/>
 
+            <TextBlock Text="Max candidates from Everything per query:" Margin="0,0,0,4"/>
+            <TextBox Name="EverythingLimitBox" Width="120" HorizontalAlignment="Left" Margin="0,0,0,12"/>
+
             <TextBlock Text="Never index these file extensions (semicolons, dots optional):" TextWrapping="Wrap" Margin="0,0,0,4"/>
             <TextBox Name="ExcludeBox" Margin="0,0,0,12"/>
 
-            <TextBlock Text="Get a TypeSafe key at https://console.typesafe.ai/settings/keys. Without a key the plugin still works as a fuzzy file launcher." TextWrapping="Wrap" Opacity="0.7"/>
+            <TextBlock Text="Never index paths containing these fragments (semicolons):" TextWrapping="Wrap" Margin="0,0,0,4"/>
+            <TextBox Name="ExcludePathsBox" Margin="0,0,0,12"/>
+            <TextBlock Text="Clear the field to search everything, including AppData and build folders." TextWrapping="Wrap" Opacity="0.7" Margin="0,0,0,12"/>
+
+            <TextBlock Text="Enter opens the highlighted row. Prefix the query with folder or copy to open the location or copy the full path instead. Get a TypeSafe key at https://console.typesafe.ai/settings/keys: without one the plugin still works as a fuzzy file launcher." TextWrapping="Wrap" Opacity="0.7"/>
         </StackPanel>
     </ScrollViewer>
 </UserControl>

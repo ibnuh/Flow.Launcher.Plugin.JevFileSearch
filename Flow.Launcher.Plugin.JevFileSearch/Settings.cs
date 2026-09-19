@@ -23,8 +23,27 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         /// <summary>Semicolon separated, dots optional. Files with these extensions are never indexed.</summary>
         public string ExcludeExtensions { get; set; } = DefaultExcludeExtensions;
 
+        /// <summary>
+        /// Path fragments to ignore. System, cache and build directories only add noise
+        /// to file search, so they stay out unless the user clears this field.
+        /// </summary>
+        public string ExcludePaths { get; set; } = DefaultExcludePaths;
+
+        /// <summary>Max candidates requested from Everything per query.</summary>
+        public int EverythingLimit { get; set; } = 60;
+
         public const string DefaultExcludeExtensions =
             "lnk;url;tmp;temp;log;crdownload;part;partial;bak;old;sys;dll;ini;db;dat;msi;msp;manifest;pf;etl;pdb";
+
+        /// <summary>Directory fragments that are noise for file search.</summary>
+        public static readonly string[] DefaultExcludePathFragments =
+        {
+            @"\AppData\", @"\.git\", @"\.vs\", @"\.nuget\", @"\.cache\", @"\.vscode\", @"\node_modules\",
+            @"$Recycle.Bin", @"\Windows\", @"System Volume Information", @"\Program Files\",
+            @"\Program Files (x86)\", @"\ProgramData\", @"__pycache__", @"\.venv\", @"\site-packages\",
+        };
+
+        public static readonly string DefaultExcludePaths = string.Join(";", DefaultExcludePathFragments);
 
         /// <summary>Start Menu shortcut names that are installer or documentation noise, not apps.</summary>
         private static readonly string[] AppLinkNoise =
@@ -65,7 +84,10 @@ namespace Flow.Launcher.Plugin.JevFileSearch
         {
             if (string.IsNullOrEmpty(path))
                 return true;
-            string name = Path.GetFileName(path);
+            // Normalise separators so the check behaves the same whatever the host OS uses.
+            string normalised = path.Replace('\\', Path.DirectorySeparatorChar)
+                .Replace('/', Path.DirectorySeparatorChar);
+            string name = Path.GetFileName(normalised);
             if (string.IsNullOrEmpty(name))
                 return true;
             // Hidden files and editor/Office temp files.
@@ -83,6 +105,31 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             if (string.IsNullOrEmpty(ext))
                 return false;
             return ExcludedExtensionSet().Contains(ext);
+        }
+
+        /// <summary>True when a full path sits in an ignored directory such as AppData or node_modules.</summary>
+        public bool IsExcludedPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                return true;
+            if (string.IsNullOrWhiteSpace(ExcludePaths))
+                return false;
+            string lowered = path.ToLowerInvariant().Replace('/', '\\');
+            foreach (var raw in ExcludePaths.Split(new[] { ';', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                string fragment = raw.Trim().Replace('/', '\\').ToLowerInvariant();
+                if (fragment.Length == 0)
+                    continue;
+                if (lowered.IndexOf(fragment, StringComparison.Ordinal) >= 0)
+                    return true;
+            }
+            return false;
+        }
+
+        /// <summary>Extension and path exclusions plus temp/hidden file names, in one call.</summary>
+        public bool IsJunk(string path)
+        {
+            return IsExcludedFile(path) || IsExcludedPath(path);
         }
 
         /// <summary>

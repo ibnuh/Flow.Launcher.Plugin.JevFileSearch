@@ -17,7 +17,12 @@ jobs:
             - name: Setup .NET
               uses: actions/setup-dotnet@v4
               with:
-                  dotnet-version: 9.x
+                  dotnet-version: |
+                      9.x
+                      8.x
+
+            - name: Run logic tests
+              run: dotnet run --project tools/logic-tests/LogicTests.csproj -c Release
 
             - name: Restore
               run: dotnet restore Flow.Launcher.Plugin.JevFileSearch/Flow.Launcher.Plugin.JevFileSearch.csproj
