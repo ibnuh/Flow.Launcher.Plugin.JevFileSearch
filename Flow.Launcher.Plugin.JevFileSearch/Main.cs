@@ -144,7 +144,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             try
             {
                 var pool = SnapshotIndex();
-                string everythingDiagnostics;
+                string everythingDiagnostics = "";
                 var everything = await Task.Run(
                         () => EverythingCandidates(search, _settings, out everythingDiagnostics),
                         cancellationToken)
