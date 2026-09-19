@@ -79,7 +79,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 ActionKind.SystemToggle,
                 info.Keywords.ToList(),
                 PayloadKind.Toggle,
-                toggle: toggle);
+                toggle: toggle,
+                iconPath: FileIcons.Toggle);
         }
 
         public static List<Candidate> AllCandidates()

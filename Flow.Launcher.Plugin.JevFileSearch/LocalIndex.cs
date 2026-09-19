@@ -63,7 +63,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                         ActionKind.OpenApp,
                         new List<string> { "app", "application" },
                         PayloadKind.App,
-                        path: link));
+                        path: link,
+                        iconPath: FileIcons.App));
                 }
             }
             return apps;
@@ -83,6 +84,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                     entries.AddRange(Directory.GetFileSystemEntries(folder));
                     foreach (var dir in Directory.GetDirectories(folder))
                     {
+                        if (settings.IsExcludedPath(dir))
+                            continue;
                         try { entries.AddRange(Directory.GetFileSystemEntries(dir)); } catch { }
                     }
                 }
@@ -91,7 +94,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 var folderName = FolderLabel(folder);
                 foreach (var entry in entries.Take(settings.MaxFilesPerFolder))
                 {
-                    if (settings.IsExcludedFile(entry))
+                    if (settings.IsJunk(entry))
                         continue;
                     files.Add(FileCandidate(entry, now, folderName));
                 }
@@ -124,11 +127,15 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                 results.Add(new Candidate(
                     "drive:" + root,
                     letter + " drive",
-                    "Drive \u00b7 " + (totalGb > 0 ? totalGb.ToString("F0") + " GB, " + (freeBytes / 1073741824.0).ToString("F0") + " GB free" : "local disk"),
+                    "Drive \u00b7 " + (totalGb > 0
+                        ? totalGb.ToString("F0") + " GB, " + (freeBytes / 1073741824.0).ToString("F0") + " GB free"
+                        : "local disk"),
                     ActionKind.OpenFile,
                     new List<string> { "drive", "disk", "volume", letter.ToLowerInvariant() },
                     PayloadKind.File,
-                    path: root));
+                    path: root,
+                    isDirectory: true,
+                    iconPath: FileIcons.Drive));
 
                 var entries = new List<string>();
                 try
@@ -136,6 +143,8 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                     entries.AddRange(Directory.GetFileSystemEntries(root));
                     foreach (var dir in Directory.GetDirectories(root))
                     {
+                        if (settings.IsExcludedPath(dir))
+                            continue;
                         try { entries.AddRange(Directory.GetFileSystemEntries(dir)); } catch { }
                     }
                 }
@@ -143,7 +152,7 @@ namespace Flow.Launcher.Plugin.JevFileSearch
 
                 foreach (var entry in entries.Take(settings.MaxFilesPerFolder))
                 {
-                    if (settings.IsExcludedFile(entry))
+                    if (settings.IsJunk(entry))
                         continue;
                     results.Add(FileCandidate(entry, now, letter));
                 }
@@ -151,12 +160,26 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             return results;
         }
 
-        /// <summary>Builds an open_file candidate with keywords and a recency phrase for Jev.</summary>
+        /// <summary>Builds an open_file candidate with keywords, size, icon and a recency phrase for Jev.</summary>
         public static Candidate FileCandidate(string entry, DateTime now, string folder = null)
         {
             bool isDir = Directory.Exists(entry);
             DateTime modified;
-            try { modified = isDir ? Directory.GetLastWriteTime(entry) : File.GetLastWriteTime(entry); }
+            long? size = null;
+            try
+            {
+                if (isDir)
+                {
+                    modified = Directory.GetLastWriteTime(entry);
+                }
+                else
+                {
+                    var info = new FileInfo(entry);
+                    modified = info.LastWriteTime;
+                    if (info.Exists)
+                        size = info.Length;
+                }
+            }
             catch { modified = now; }
 
             double ageDays = Math.Max(0, (now - modified).TotalDays);
@@ -185,18 +208,39 @@ namespace Flow.Launcher.Plugin.JevFileSearch
             if (!string.IsNullOrEmpty(home) && location.StartsWith(home, StringComparison.OrdinalIgnoreCase))
                 location = "~" + location.Substring(home.Length);
 
-            string label = isDir ? "Folder" : FileTypeLabel(ext);
-            string subtitle = label + " in " + location + " \u00b7 " + Recency(ageDays);
-
             return new Candidate(
                 "file:" + entry,
                 name,
-                subtitle,
+                SubtitleFor(isDir, ext, location, size, ageDays),
                 ActionKind.OpenFile,
                 keywords,
                 PayloadKind.File,
                 path: entry,
-                ageDays: ageDays);
+                ageDays: ageDays,
+                sizeBytes: size,
+                isDirectory: isDir,
+                iconPath: isDir ? FileIcons.Folder : FileIcons.ForExtension(ext));
+        }
+
+        /// <summary>Example: "PDF, 2.4 MB, ~\Downloads, modified 16 min ago".</summary>
+        public static string SubtitleFor(bool isDirectory, string extension, string location, long? sizeBytes, double ageDays)
+        {
+            var parts = new List<string>();
+            parts.Add(isDirectory ? "Folder" : (string.IsNullOrEmpty(extension) ? "File" : extension.ToUpperInvariant()));
+            if (sizeBytes.HasValue && !isDirectory)
+            {
+                double bytes = sizeBytes.Value;
+                string label;
+                if (bytes < 1024) label = bytes + " B";
+                else if (bytes < 1024 * 1024) label = (bytes / 1024).ToString("F0") + " KB";
+                else if (bytes < 1024L * 1024 * 1024) label = (bytes / (1024.0 * 1024)).ToString("F1") + " MB";
+                else label = (bytes / (1024.0 * 1024 * 1024)).ToString("F2") + " GB";
+                parts.Add(label);
+            }
+            if (!string.IsNullOrEmpty(location))
+                parts.Add(location);
+            parts.Add(Recency(ageDays));
+            return string.Join(" \u00b7 ", parts);
         }
 
         private static string FolderLabel(string directory)
@@ -256,11 +300,6 @@ namespace Flow.Launcher.Plugin.JevFileSearch
                     return new[] { "code", "source" };
                 default: return new string[0];
             }
-        }
-
-        private static string FileTypeLabel(string ext)
-        {
-            return string.IsNullOrEmpty(ext) ? "File" : ext.ToUpperInvariant();
         }
 
         /// <summary>Human-readable recency phrase. Jev reads recency far better as words than as timestamps.</summary>
